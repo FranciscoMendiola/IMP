@@ -17,7 +17,7 @@ data ExprReg
   | Term Char
   | And ExprReg ExprReg
   | Or  ExprReg ExprReg
-  | Kleene ExprReggex
+  | Kleene ExprReg
   deriving (Eq)
 
 -- Pretty-print: Representación como cadena (String).
