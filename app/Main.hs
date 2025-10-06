@@ -1,5 +1,9 @@
 module Main where
 
+import Com.Syrion.Models.Automata.AFN
+  ( afnEpToAFN,
+    prettyAFN,
+  )
 import Com.Syrion.Models.Automata.AFNEp
   ( exprRegToAFNEp,
     prettyAFNEp,
@@ -21,3 +25,7 @@ main = do
   let nfae = exprRegToAFNEp er
   putStrLn "\n== AFN-ε (Thompson) =="
   putStrLn (prettyAFNEp nfae)
+
+  let nfa = afnEpToAFN nfae
+  putStrLn "\n== AFN (sin ε) =="
+  putStrLn (prettyAFN nfa)
