@@ -27,6 +27,7 @@ executable imp
   build-depends:
       base
     , text
+    , containers
     , imp
   default-language: Haskell2010
 
@@ -36,5 +37,6 @@ test-suite imp-test
   main-is: Spec.hs
   build-depends:
       base
+    , containers
     , imp
   default-language: Haskell2010
