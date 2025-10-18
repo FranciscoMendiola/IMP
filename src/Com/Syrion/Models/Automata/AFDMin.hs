@@ -22,31 +22,7 @@ data AFDmin = AFDmin
 ordPair :: (Ord a) => (a,a) -> (a,a)
 ordPair (x,y) = if x <= y then (x,y) else (y,x)
 
-totaliza :: AFD -> AFD
-totaliza afd =
-  let qs  = estadosD afd
-      sig = alfabetoD afd
-      ts  = transicionesD afd
-
-      falta (p,a) = null [ () | (p1,a1,_) <- ts, p1==p, a1==a ]
-
-      sink :: EstadoD
-      sink = []
-
-      hayHuecos = or [ falta (p,a) | p <- qs, a <- sig ]
-
-      destino p a =
-        case [ q | (p1,a1,q) <- ts, p1==p, a1==a ] of
-          (q:_) -> q
-          _     -> sink
-
-      tsFix  = [ (p,a,destino p a) | p <- qs, a <- sig ]
-      tsSink = [ (sink,a,sink) | a <- sig ]
-
-      qs' = if hayHuecos then nub (sink:qs) else qs
-      ts' = nub (tsFix ++ (if hayHuecos then tsSink else []))
-  in afd { estadosD = qs', transicionesD = ts' }
-
+-- Union-Find
 ufFind :: (Ord a) => a -> M.Map a a -> (a, M.Map a a)
 ufFind x parent =
   case M.lookup x parent of
@@ -76,11 +52,8 @@ agrupar xs pares =
   in map reverse (M.elems buckets)
 
 afdToAfdMin :: AFD -> AFDmin
-afdToAfdMin afd0 =
+afdToAfdMin afd =
   let
-      -- 0) totalizar primero
-      afd = totaliza afd0
-
       qs  = estadosD afd
       fs  = finalesD afd
       sig = alfabetoD afd
@@ -90,29 +63,33 @@ afdToAfdMin afd0 =
       -- Pares (p<q)
       pares = [ (p,q) | p <- qs, q <- qs, p < q ]
 
-      -- Base: final vs no final (guardada normalizada)
+      -- Base: final vs no final
       baseMarcados =
         [ ordPair (p,q)
         | (p,q) <- pares
         , (p `elem` fs) /= (q `elem` fs)
         ]
 
-      -- δ totalizada: a lo más 1 destino
-      delta p a = [ q2 | (p1,a1,q2) <- ts, p1 == p, a1 == a ]
+      deltaM p a =
+        case [ q2 | (p1,a1,q2) <- ts, p1==p, a1==a ] of
+          (q2:_) -> Just q2
+          _      -> Nothing
 
-      -- Inducción: si ∃a. (δ(p,a),δ(q,a)) ya marcado ⇒ marcar (p,q)
+      marcaPaso marcados =
+        [ (p,q)
+        | (p,q) <- pares
+        , ordPair (p,q) `notElem` marcados
+        , any (\a ->
+            case (deltaM p a, deltaM q a) of
+              (Just dp, Just dq) -> ordPair (dp, dq) `elem` marcados
+              (Nothing, Just _)  -> True
+              (Just _, Nothing)  -> True
+              (Nothing, Nothing) -> False
+          ) sig
+        ]
+
       marcar marcados =
-        let nuevos =
-              [ (p,q)
-              | (p,q) <- pares
-              , ordPair (p,q) `notElem` marcados
-              , any (\a ->
-                      let dp = delta p a
-                          dq = delta q a
-                      in not (null dp) && not (null dq)
-                         && ordPair (head dp, head dq) `elem` marcados
-                    ) sig
-              ]
+        let nuevos = marcaPaso marcados
             marcados' = marcados ++ map ordPair nuevos
         in if null nuevos then marcados else marcar marcados'
 
@@ -121,14 +98,14 @@ afdToAfdMin afd0 =
       -- Pares NO marcados → equivalentes
       eqPairs = [ ordPair (p,q) | (p,q) <- pares, ordPair (p,q) `notElem` marcados ]
 
-      -- Clases (Union-Find garantiza cierre transitivo)
+      -- Clases de equivalencia
       clases = agrupar qs eqPairs
 
-      -- Renombrar a 0..k-1
+      -- Renombrado 0..k-1
       clasesNum = zip [0..] clases
       nombre q  = head [ n | (n, c) <- clasesNum, q `elem` c ]
 
-      -- Reconstruir δ' sobre clases
+      -- Reconstruir δ' sólo con transiciones existentes (sin sumidero)
       tsM = nub [ (nombre p, a, nombre q) | (p,a,q) <- ts ]
       fM  = nub [ nombre q | q <- fs ]
       q0M = nombre q0
@@ -138,11 +115,14 @@ afdToAfdMin afd0 =
 
 prettyAFDmin :: AFDmin -> String
 prettyAFDmin afd =
-  unlines $
-    [ "Estados AFDmin: " ++ show (estadosM afd)
+  let tsV = transicionesM afd
+      qsV = nub $ [ inicialM afd ] ++ finalesM afd
+                 ++ [ p | (p,_,_) <- tsV ] ++ [ q | (_,_,q) <- tsV ]
+  in unlines $
+    [ "Estados AFDmin: " ++ show qsV
     , "Alfabeto:       " ++ show (alfabetoM afd)
     , "Inicial:        q" ++ show (inicialM afd)
     , "Finales:        " ++ show (map (\q -> "q"++show q) (finalesM afd))
     , "Transiciones:"
     ] ++ [ "  q"++show p ++ " --"++[a]++"--> q"++show q
-         | (p,a,q) <- transicionesM afd ]
+         | (p,a,q) <- tsV ]

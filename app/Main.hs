@@ -35,7 +35,9 @@ import Com.Syrion.Models.Lexer.Token (TokenKind(..))
 main :: IO ()
 main = do
   -- Expresión regular de prueba: a + b
-  let er = (term 'a') $$ (term 'b')
+  let er1 = (term 'i') $$ (term 'f')
+  let er2 = (term 't') $$ (term 'h') $$ (term 'e') $$ (term 'n')
+  let er = er1 ## er2
   putStrLn $ "ER: " ++ show er
 
   -- ER -> AFNε (Thompson)
@@ -63,7 +65,7 @@ main = do
 
   putStrLn "\n== MDD (desde AFDmin) =="
   print $ runMDD mdd "a"     
-  print $ runMDD mdd "b"    
-  print $ runMDD mdd "ab"    
-  print $ runMDD mdd "abb"   
-  print $ runMDD mdd "ac"     
+  print $ runMDD mdd "ifff"    
+  print $ runMDD mdd "f"    
+  print $ runMDD mdd "then if"   
+  print $ runMDD mdd "if then" 
