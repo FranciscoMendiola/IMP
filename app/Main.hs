@@ -4,167 +4,153 @@ module Main where
 import System.IO (hSetEncoding, stdout, utf8)
 import qualified Data.Map.Strict as Map
 
--- ER DSL
+-- ===== Parte 1: Pipeline clásico (demo ER simple) =====
 import Com.Syrion.Models.Regex.ExprReg
-  ( ExprReg(..), term, kleene, (##), ($$) )
+  ( ExprReg(..), term, ($$) )  
 
--- Pipeline AFNε -> AFN -> AFD
-import Com.Syrion.Models.Automata.AFNEp (exprRegToAFNEp)
-import Com.Syrion.Models.Automata.AFN   (afnEpToAFN)
-import Com.Syrion.Models.Automata.AFD   (AFD(..), afnToAfd)
+import Com.Syrion.Models.Automata.AFNEp
+  ( exprRegToAFNEp, prettyAFNEp )
+import Com.Syrion.Models.Automata.AFN
+  ( afnEpToAFN, prettyAFN )
+import Com.Syrion.Models.Automata.AFD
+  ( afnToAfd, prettyAFD )
+import Com.Syrion.Models.Automata.AFDMin
+  ( afdToAfdMin, prettyAFDmin, finalesM )
 
--- MDD
 import Com.Syrion.Models.Automata.MDD
-  ( MDD(..), afdToMDD, longestPrefixMDD )
+  ( MDD, afdMinToMDD, runMDD )
 
--- Clasificación de tokens
-import Com.Syrion.Models.Lexer.Token (TokenKind(..))
-import Com.Syrion.Models.Lenguajes.ImpSpec (impMu)  -- tu función de clasificación
+import Com.Syrion.Models.Lexer.Token  (TokenKind(..))
 
--- =========================
--- ERs pequeñas por grupo
--- =========================
+import Com.Syrion.Models.Lenguajes.ImpFast (scanIMP, renderTokens)
+import Com.Syrion.Models.Lenguajes.ImpSpec (impMu)
 
-digit :: ExprReg
-digit = foldr1 (##) (map term "0123456789")
+imprimirPar :: (Maybe TokenKind, String) -> IO ()
+imprimirPar (Just tok, lx) = putStrLn $ "    " ++ rellenarDerecha 12 (show tok) ++ " => " ++ show lx
+imprimirPar (Nothing , lx) = putStrLn $ "    ERROR        => " ++ show lx
 
-lower :: ExprReg
-lower = foldr1 (##) (map term "abcdefghijklmnopqrstuvwxyz")
-
-upper :: ExprReg
-upper = foldr1 (##) (map term "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-letter :: ExprReg
-letter = lower ## upper
-
--- Id: letter (letter|digit)*
-identifierER :: ExprReg
-identifierER = letter $$ kleene (letter ## digit)
-
--- Int: digit+
-intLitER :: ExprReg
-intLitER = digit $$ kleene digit
-
--- WS: (espacio|tab|nl)+
-wsER :: ExprReg
-wsER = (term ' ' ## term '\t' ## term '\n')
-    $$ kleene (term ' ' ## term '\t' ## term '\n')
-
--- Keywords literales: if, then, else, while, do, skip, true, false, not, and
-kwIf    = term 'i' $$ term 'f'
-kwThen  = term 't' $$ term 'h' $$ term 'e' $$ term 'n'
-kwElse  = term 'e' $$ term 'l' $$ term 's' $$ term 'e'
-kwWhile = term 'w' $$ term 'h' $$ term 'i' $$ term 'l' $$ term 'e'
-kwDo    = term 'd' $$ term 'o'
-kwSkip  = term 's' $$ term 'k' $$ term 'i' $$ term 'p'
-kwTrue  = term 't' $$ term 'r' $$ term 'u' $$ term 'e'
-kwFalse = term 'f' $$ term 'a' $$ term 'l' $$ term 's' $$ term 'e'
-kwNot   = term 'n' $$ term 'o' $$ term 't'
-kwAnd   = term 'a' $$ term 'n' $$ term 'd'
-
--- Unimos KW + Id en un solo MDD (clasificación final via impMu con prioridad a KW)
-kwPlusIdER :: ExprReg
-kwPlusIdER = kwIf ## kwThen ## kwElse ## kwWhile ## kwDo ## kwSkip
-          ## kwTrue ## kwFalse ## kwNot ## kwAnd
-          ## identifierER
-
--- Operadores/delims de 1 char (SIN ':=' ni '<=' aquí)
-ops1ER :: ExprReg
-ops1ER =
-  foldr1 (##) (map term "+-*=;()<>:")  -- incluimos ':', '<' y '=' unitarios
-
--- =========================
--- Builders por grupo (AFD -> MDD, sin minimizar)
--- =========================
-
-buildMDD :: ExprReg -> MDD
-buildMDD er =
-  let afnep = exprRegToAFNEp er
-      afn   = afnEpToAFN afnep
-      afd   = afnToAfd afn
-      mu    = Map.fromList
-               [ (i, Id)
-               | (i, qD) <- zip [0..] (estadosD afd)
-               , qD `elem` finalesD afd
-               ]
-  in afdToMDD afd mu
-
-mddKW_ID :: MDD
-mddKW_ID = buildMDD kwPlusIdER
-
-mddINT :: MDD
-mddINT = buildMDD intLitER
-
-mddWS :: MDD
-mddWS = buildMDD wsER
-
-mddOPS1 :: MDD
-mddOPS1 = buildMDD ops1ER
-
--- =========================
--- Escáner combinado (prefijo máximo + prioridad)
--- =========================
-
--- Prioridad cuando hay empates de longitud:
---   1) KW/Id  2) Int  3) Ops1  4) WS
-priorityOrder :: [(String, MDD)]
-priorityOrder =
-  [ ("KW_ID", mddKW_ID)
-  , ("INT"  , mddINT)
-  , ("OPS1" , mddOPS1)
-  , ("WS"   , mddWS)
-  ]
-
-data Tok = Tok { kind :: TokenKind, lexeme :: String, pos :: Int }
-  deriving (Show)
-
-scanIMP :: String -> Either String [Tok]
-scanIMP = go 0
-  where
-    go _ [] = Right []
-    go i s@(c:_) =
-      let candidates =
-            [ (tag, longestPrefixMDD m s, m)
-            | (tag, m) <- priorityOrder
-            ]
-          (bestTag, bestLex, _bestM) =
-            foldl pick ("", "", mddWS) candidates
-          pick acc@(_, accLex, _) cur@(tag, lex, m)
-            | length lex > length accLex = cur
-            | otherwise                   = acc
-
-          rest = drop (length bestLex) s
-
-          -- Recombinar pares 2-char antes de clasificar
-          (lexToClassify, extraConsumed) =
-            case (bestTag, bestLex, rest) of
-              ("OPS1", "<", ('=':_)) -> ("<=", 1)  -- Leq
-              ("OPS1", ":", ('=':_)) -> (":=", 1)  -- Assign
-              _                      -> (bestLex, 0)
-
-          totalLen = length bestLex + extraConsumed
-          advance  = drop totalLen s
-      in if null bestLex
-           then Left $ "Error lexico en la posicion " ++ show i ++ ": '" ++ take 1 s ++ "'"
-           else
-             case impMu lexToClassify of
-               Just WS      -> go (i + totalLen) advance   -- ignoramos espacios
-               Just Comment -> go (i + totalLen) advance   -- por si luego añades comentarios
-               Just knd     ->
-                 let t = Tok { kind = knd, lexeme = lexToClassify, pos = i }
-                 in (t :) <$> go (i + totalLen) advance
-               Nothing      ->
-                 Left $ "Error lexico en la posicion " ++ show i ++ ": '" ++ lexToClassify ++ "'"
-
--- =========================
--- Main
--- =========================
+rellenarDerecha :: Int -> String -> String
+rellenarDerecha n s = s ++ replicate (max 0 (n - length s)) ' '
 
 main :: IO ()
 main = do
+  -- UTF-8 para Windows
   hSetEncoding stdout utf8
-  putStrLn "=== LEXER IMP (multi-MDD, recombinando <= y :=) ==="
-  let prog = "if"
-  case scanIMP prog of
-    Left err   -> putStrLn ("LEX ERROR: " ++ err)
-    Right toks -> mapM_ print toks
+
+  putStrLn "=========================================="
+  putStrLn "  ANALIZADOR LEXICO - PIPELINE COMPLETO"
+  putStrLn "  ER -> AFNeps -> AFN -> AFD -> AFDmin -> MDD -> LEXER"
+  putStrLn "=========================================="
+  putStrLn ""
+
+  -- ============================================
+  -- PARTE 1: Pipeline completo con ER simple (ab)
+  -- ============================================
+  putStrLn "============================================"
+  putStrLn "PARTE 1: Pipeline completo con ER simple"
+  putStrLn "============================================"
+  putStrLn ""
+
+  putStrLn "--- ER: a concatenado con b (ab) ---"
+  let er :: ExprReg
+      er = (term 'a') $$ (term 'b')
+  putStrLn $ "Expresion Regular: " ++ show er
+  putStrLn ""
+
+  -- Paso 1: ER -> AFN-ε (Thompson)
+  let nfae = exprRegToAFNEp er
+  putStrLn "== Paso 1: AFN-eps (Thompson) =="
+  putStrLn (prettyAFNEp nfae)
+
+  -- Paso 2: AFN-ε -> AFN (sin ε)
+  let nfa = afnEpToAFN nfae
+  putStrLn "== Paso 2: AFN (sin transiciones epsilon) =="
+  putStrLn (prettyAFN nfa)
+
+  -- Paso 3: AFN -> AFD (determinista)
+  let afd = afnToAfd nfa
+  putStrLn "== Paso 3: AFD (determinista) =="
+  putStrLn (prettyAFD afd)
+
+  -- Paso 4: AFD -> AFDmin (mínimo)
+  let afdMin = afdToAfdMin afd
+  putStrLn "== Paso 4: AFDmin (minimizado) =="
+  putStrLn (prettyAFDmin afdMin)
+
+  -- Paso 5: AFDmin -> MDD
+  let mu = Map.fromList [ (q, Id) | q <- finalesM afdMin ]
+  let mdd :: MDD
+      mdd = afdMinToMDD afdMin mu
+  putStrLn "== Paso 5: MDD (Maquina Discriminadora Determinista) =="
+  putStrLn "MDD construido exitosamente"
+  putStrLn ""
+
+  -- Paso 6: MDD -> LEXER (aplicando funcion mu) con el MISMO estilo (sin tablas)
+  putStrLn "== Paso 6: LEXER (MDD + funcion mu) =="
+  putStrLn "Tokenizando cadenas de prueba:"
+  putStrLn ""
+
+  -- Usamos runMDD + impMu, y mostramos pares (Maybe TokenKind, String) con imprimirPar
+
+  -- Prueba 1: "a" (incompleto)
+  putStrLn "  Entrada: \"a\""
+  let pares1 = runMDD mdd "a"
+  let clasificados1 = map (\(_, lx) -> (impMu lx, lx)) pares1
+  putStrLn "  Tokens:"
+  mapM_ imprimirPar clasificados1
+  putStrLn "  Resultado: No acepta (necesita 'ab' completo)"
+  putStrLn ""
+
+  -- Prueba 2: "b" (no empieza bien)
+  putStrLn "  Entrada: \"b\""
+  let pares2 = runMDD mdd "b"
+  let clasificados2 = map (\(_, lx) -> (impMu lx, lx)) pares2
+  putStrLn "  Tokens:"
+  mapM_ imprimirPar clasificados2
+  putStrLn "  Resultado: Error lexico (no acepta 'b' solo)"
+  putStrLn ""
+
+  -- Prueba 3: "ab" (correcto)
+  putStrLn "  Entrada: \"ab\""
+  let pares3 = runMDD mdd "ab"
+  let clasificados3 = map (\(_, lx) -> (impMu lx, lx)) pares3
+  putStrLn "  Tokens:"
+  mapM_ imprimirPar clasificados3
+  putStrLn "  Resultado: ACEPTA - 'ab' es reconocido como Id"
+  putStrLn ""
+
+  -- Prueba 4: "abb" (maximal munch)
+  putStrLn "  Entrada: \"abb\""
+  let pares4 = runMDD mdd "abb"
+  let clasificados4 = map (\(_, lx) -> (impMu lx, lx)) pares4
+  putStrLn "  Tokens:"
+  mapM_ imprimirPar clasificados4
+  putStrLn "  Resultado: Maximal munch - reconoce 'ab', sobra 'b' (error)"
+  putStrLn ""
+
+  -- Prueba 5: "abc"
+  putStrLn "  Entrada: \"abc\""
+  let pares5 = runMDD mdd "abc"
+  let clasificados5 = map (\(_, lx) -> (impMu lx, lx)) pares5
+  putStrLn "  Tokens:"
+  mapM_ imprimirPar clasificados5
+  putStrLn "  Resultado: Maximal munch - reconoce 'ab', sobra 'c' (error)"
+  putStrLn ""
+
+  -- ============================================
+  -- PARTE 2: Lexer IMP (rápido) + Tabla bonita
+  -- ============================================
+  putStrLn "============================================"
+  putStrLn "PARTE 2: LEXER PARA IMP"
+  putStrLn "============================================"
+  putStrLn ""
+
+  let progIMP = "if x <= 10 then skip else x := x + 1"
+
+  putStrLn "Programa (IMP):"
+  putStrLn progIMP
+  putStrLn ""
+  putStrLn "Tokens (IMP):"
+  case scanIMP progIMP of
+    Left err    -> putStrLn ("LEX ERROR: " ++ err)
+    Right toks  -> renderTokens toks

@@ -4,7 +4,7 @@ module Com.Syrion.Models.Automata.MDD
   , afdMinToMDD      -- AFDmin -> MDD
   , afdToMDD         -- AFD    -> MDD (sin minimizar)
   , runMDD           -- ejecución completa (si la quieres)
-  , longestPrefixMDD -- 👈 prefijo máximo sin consumir toda la entrada
+  , longestPrefixMDD 
   , prettyMDD
   ) where
 
@@ -46,76 +46,73 @@ afdToMDD afd mu =
       transD   = transicionesD afd
       startD   = inicialD afd
       finalsD' = finalesD afd
-      numbered = zip [0..] statesD
-      findId s = case [ i | (i,s') <- numbered, s' == s ] of
+      numerados = zip [0..] statesD
+      encontrarId s = case [ i | (i,s') <- numerados, s' == s ] of
                    (i:_) -> i
                    _     -> error "afdToMDD: estado determinista no encontrado"
-      qs     = map fst numbered
-      q0     = findId startD
-      fs     = map findId finalsD'
-      deltaM = Map.fromList [ ((findId p, a), findId q) | (p,a,q) <- transD ]
+      qs     = map fst numerados
+      q0     = encontrarId startD
+      fs     = map encontrarId finalsD'
+      deltaM = Map.fromList [ ((encontrarId p, a), encontrarId q) | (p,a,q) <- transD ]
   in MDD qs sigma deltaM q0 fs mu
 
 -- =======================
 -- Runner (completo)
 -- =======================
 runMDD :: MDD -> String -> [(Maybe TokenKind, String)]
-runMDD mdd input = go (inicialMDD mdd) "" input Nothing []
+runMDD mdd entrada = recorrer (inicialMDD mdd) "" entrada Nothing []
   where
-    go _ _ [] Nothing acc = reverse acc
-    go _ _ [] (Just (tok, lexm)) acc = reverse ((tok, lexm) : acc)
-    go q lexema (x:xs) ultimo acc =
+    recorrer _ _ [] Nothing acum = reverse acum
+    recorrer _ _ [] (Just (tok, lexm)) acum = reverse ((tok, lexm) : acum)
+    recorrer q lexema (x:xs) ultimo acum =
       case Map.lookup (q, x) (deltaMDD mdd) of
         Just q' ->
           let lex'    = lexema ++ [x]
               ultimo' = if q' `elem` finalesMDD mdd
                         then Just (Map.lookup q' (muMDD mdd), lex')
                         else ultimo
-          in go q' lex' xs ultimo' acc
+          in recorrer q' lex' xs ultimo' acum
         Nothing ->
           case ultimo of
             Just (Just tok, pref) ->
               let resto = drop (length pref) (lexema ++ x:xs)
-              in go (inicialMDD mdd) "" resto Nothing ((Just tok, pref) : acc)
+              in recorrer (inicialMDD mdd) "" resto Nothing ((Just tok, pref) : acum)
             Just (Nothing, pref) ->
               let resto = drop (length pref) (lexema ++ x:xs)
-              in go (inicialMDD mdd) "" resto Nothing ((Nothing, pref) : acc)
+              in recorrer (inicialMDD mdd) "" resto Nothing ((Nothing, pref) : acum)
             Nothing ->
               if null lexema
-                then go (inicialMDD mdd) "" xs Nothing ((Nothing, [x]) : acc)
-                else go (inicialMDD mdd) "" (x:xs) Nothing ((Nothing, lexema) : acc)
+                then recorrer (inicialMDD mdd) "" xs Nothing ((Nothing, [x]) : acum)
+                else recorrer (inicialMDD mdd) "" (x:xs) Nothing ((Nothing, lexema) : acum)
 
--- =======================
--- Prefijo máximo (local)
--- =======================
 -- Devuelve el lexema más largo aceptado desde el inicio del string dado.
 -- No consume más allá (sirve para combinar varios MDDs por prioridad).
 longestPrefixMDD :: MDD -> String -> String
-longestPrefixMDD mdd s = go (inicialMDD mdd) "" s Nothing
+longestPrefixMDD mdd s = recorrer (inicialMDD mdd) "" s Nothing
   where
-    go _ acc [] lastOk =
-      case lastOk of
-        Just best -> best
-        Nothing   -> ""
-    go q acc (x:xs) lastOk =
+    recorrer _ acum [] ultimoOk =
+      case ultimoOk of
+        Just mejor -> mejor
+        Nothing    -> ""
+    recorrer q acum (x:xs) ultimoOk =
       case Map.lookup (q, x) (deltaMDD mdd) of
         Just q' ->
-          let acc'   = acc ++ [x]
-              lastOk' = if q' `elem` finalesMDD mdd
-                        then Just acc'
-                        else lastOk
-          in go q' acc' xs lastOk'
+          let acum'    = acum ++ [x]
+              ultimoOk' = if q' `elem` finalesMDD mdd
+                          then Just acum'
+                          else ultimoOk
+          in recorrer q' acum' xs ultimoOk'
         Nothing ->
-          case lastOk of
-            Just best -> best
-            Nothing   -> ""
+          case ultimoOk of
+            Just mejor -> mejor
+            Nothing    -> ""
 
 -- =======================
 -- Debug
 -- =======================
 prettyMDD :: MDD -> String
 prettyMDD m =
-  let hdr =
+  let encabezado =
         [ "MDD"
         , "  #estados = " ++ show (length (estadosMDD m))
         , "  alfabeto = " ++ show (alfabetoMDD m)
@@ -129,4 +126,4 @@ prettyMDD m =
         [ "    q" ++ show p ++ " --" ++ [a] ++ "--> q" ++ show q
         | ((p,a), q) <- Map.toList (deltaMDD m)
         ]
-  in unlines (hdr ++ ts)
+  in unlines (encabezado ++ ts)

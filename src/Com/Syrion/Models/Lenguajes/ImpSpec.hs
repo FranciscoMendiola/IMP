@@ -19,23 +19,23 @@ import Data.Char (isSpace)
 -- ERs base
 -- ============================================
 
-digit :: ExprReg
-digit = foldr1 (##) (map term "0123456789")
+digito :: ExprReg
+digito = foldr1 (##) (map term "0123456789")
 
-lower :: ExprReg
-lower = foldr1 (##) (map term "abcdefghijklmnopqrstuvwxyz")
+minuscula :: ExprReg
+minuscula = foldr1 (##) (map term "abcdefghijklmnopqrstuvwxyz")
 
-upper :: ExprReg
-upper = foldr1 (##) (map term "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+mayuscula :: ExprReg
+mayuscula = foldr1 (##) (map term "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-letter :: ExprReg
-letter = lower ## upper
+letra :: ExprReg
+letra = minuscula ## mayuscula
 
-intLitER :: ExprReg
-intLitER = digit $$ kleene digit
+enteroLitER :: ExprReg
+enteroLitER = digito $$ kleene digito
 
-identifierER :: ExprReg
-identifierER = letter $$ kleene (letter ## digit)
+identificadorER :: ExprReg
+identificadorER = letra $$ kleene (letra ## digito)
 
 kwIf, kwThen, kwElse, kwWhile, kwDo, kwSkip :: ExprReg
 kwTrue, kwFalse, kwNot, kwAnd :: ExprReg
@@ -51,51 +51,51 @@ kwFalse = term 'f' $$ term 'a' $$ term 'l' $$ term 's' $$ term 'e'
 kwNot   = term 'n' $$ term 'o' $$ term 't'
 kwAnd   = term 'a' $$ term 'n' $$ term 'd'
 
-opPlus, opMinus, opTimes, opAssign, opEq, opLeq :: ExprReg
-delimSemi, delimLPar, delimRPar :: ExprReg
+opMas, opMenos, opPor, opAsignar, opIgual, opMenorIgual :: ExprReg
+delimPuntoYComa, delimParIzq, delimParDer :: ExprReg
 
-opPlus    = term '+'
-opMinus   = term '-'
-opTimes   = term '*'
-opAssign  = term ':' $$ term '='
-opEq      = term '='
-opLeq     = term '<' $$ term '='
-delimSemi = term ';'
-delimLPar = term '('
-delimRPar = term ')'
+opMas         = term '+'
+opMenos       = term '-'
+opPor         = term '*'
+opAsignar     = term ':' $$ term '='
+opIgual       = term '='
+opMenorIgual  = term '<' $$ term '='
+delimPuntoYComa = term ';'
+delimParIzq     = term '('
+delimParDer     = term ')'
 
 -- Espacios: ( |\t|\n|\r)+
-wsER :: ExprReg
-wsER = (term ' ' ## term '\t' ## term '\n' ## term '\r')
+espaciosER :: ExprReg
+espaciosER = (term ' ' ## term '\t' ## term '\n' ## term '\r')
     $$ kleene (term ' ' ## term '\t' ## term '\n' ## term '\r')
 
 -- Comentario (DEFINIDO pero NO usado en impER para evitar explosión del AFD)
 -- # seguido de cualquier char != '\n'
-notNewline :: ExprReg
-notNewline =
+noNuevaLinea :: ExprReg
+noNuevaLinea =
   foldr1 (##) (map term ("0123456789" ++
                          "abcdefghijklmnopqrstuvwxyz" ++
                          "ABCDEFGHIJKLMNOPQRSTUVWXYZ" ++
                          " \t\r" ++
                          "!\"$%&'()*+,-./:;<=>?@[\\]^_`{|}~"))
 
-commentER :: ExprReg
-commentER = term '#' $$ kleene notNewline
+comentarioER :: ExprReg
+comentarioER = term '#' $$ kleene noNuevaLinea
 
 -- ============================================
--- ER completa de IMP (SIN commentER)
+-- ER completa de IMP (SIN comentarioER)
 -- ============================================
 
 impER :: ExprReg
 impER = kwIf ## kwThen ## kwElse ## kwWhile ## kwDo ## kwSkip
       ## kwTrue ## kwFalse ## kwNot ## kwAnd
-      ## opAssign ## opLeq      -- 2-char primero
-      ## opPlus ## opMinus ## opTimes ## opEq
-      ## delimSemi ## delimLPar ## delimRPar
-      ## identifierER
-      ## intLitER
-      ## wsER
-      -- ## commentER   -- ⛔ Desactivado para evitar explosión del AFD
+      ## opAsignar ## opMenorIgual      -- 2-char primero
+      ## opMas ## opMenos ## opPor ## opIgual
+      ## delimPuntoYComa ## delimParIzq ## delimParDer
+      ## identificadorER
+      ## enteroLitER
+      ## espaciosER
+      -- ## comentarioER  
 
 -- ============================================
 -- Clasificación (mu)
@@ -126,31 +126,31 @@ impMu lexema = case lexema of
   "("  -> Just LPar
   ")"  -> Just RPar
 
-  _ | all isDigit lexema && not (null lexema) -> Just IntLit
-    | not (null lexema) && isLetter (head lexema) && all isAlphaNum (tail lexema) -> Just Id
+  _ | all esDigito lexema && not (null lexema) -> Just IntLit
+    | not (null lexema) && esLetra (head lexema) && all esAlfaNum (tail lexema) -> Just Id
     | all isSpace lexema && not (null lexema) -> Just WS
     | not (null lexema) && head lexema == '#' -> Just Comment
     | otherwise -> Nothing
   where
-    isDigit c    = c >= '0' && c <= '9'
-    isLetter c   = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
-    isAlphaNum c = isLetter c || isDigit c
+    esDigito c  = c >= '0' && c <= '9'
+    esLetra c   = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+    esAlfaNum c = esLetra c || esDigito c
 
 -- ============================================
 -- Construcción del MDD y lexer de IMP
 -- ============================================
 
-buildImpMDD :: MDD
-buildImpMDD =
+construirImpMDD :: MDD
+construirImpMDD =
   let afnep  = exprRegToAFNEp impER
       afn    = afnEpToAFN afnep
       afd    = afnToAfd afn
       afdMin = afdToAfdMin afd
-      mu     = Map.fromList [ (q, Id) | q <- finalesM afdMin ] -- provisional
+      mu     = Map.fromList [ (q, Id) | q <- finalesM afdMin ] 
   in afdMinToMDD afdMin mu
 
 -- API final: programa -> tokens
 lexImpTokens :: String -> Either String [Token]
 lexImpTokens =
-  let mdd = buildImpMDD
+  let mdd = construirImpMDD
   in buildLexer mdd impMu
