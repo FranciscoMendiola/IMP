@@ -9,58 +9,67 @@ import Com.Syrion.Models.Lexer.Token (TokenKind(..))
 import qualified Data.Map.Strict as Map
 
 -- ============================================
--- Tipo Token: representa un token con posición
+-- Tipo Token
 -- ============================================
 
 data Token = Token
   { tokenKind :: TokenKind
   , lexeme    :: String
-  , position  :: Int  -- Posición en la entrada (opcional, para errores)
+  , position  :: Int
   } deriving (Eq, Show)
 
 -- ============================================
--- Función lexer principal
+-- Núcleo del lexer (sin pre-scan de comentarios)
 -- ============================================
 
--- | Convierte MDD + función de clasificación en un lexer completo
--- La función mu clasifica lexemas en sus tipos de token
--- CAMBIO: Devuelve Either String [Token] para manejar errores léxicos
 lexer :: MDD -> (String -> Maybe TokenKind) -> String -> Either String [Token]
 lexer mdd mu input =
   let rawTokens = runMDD mdd input
   in classifyAndFilter rawTokens mu 0
 
--- Clasifica tokens usando mu, filtra ignorables y maneja errores
 classifyAndFilter :: [(Maybe TokenKind, String)]
                   -> (String -> Maybe TokenKind)
                   -> Int
                   -> Either String [Token]
-classifyAndFilter [] _ _ = Right [] -- Caso base: éxito
+classifyAndFilter [] _ _ = Right []
 classifyAndFilter ((_, lex):rest) mu pos =
   case mu lex of
-    Just WS ->
-      -- Ignorar espacios en blanco
-      classifyAndFilter rest mu (pos + length lex)
-
-    Just Comment ->
-      -- Ignorar comentarios
-      classifyAndFilter rest mu (pos + length lex)
-
-    Just kind ->
-      -- Token válido
-      let currentToken = Token kind lex pos
-      -- Usar (<$>) (fmap) para aplicar (:) a un resultado 'Either'
-      in (currentToken :) <$> classifyAndFilter rest mu (pos + length lex)
-
+    Just WS      -> classifyAndFilter rest mu (pos + length lex)
+    Just Comment -> classifyAndFilter rest mu (pos + length lex)
+    Just kind    ->
+      let tok = Token kind lex pos
+      in (tok :) <$> classifyAndFilter rest mu (pos + length lex)
     Nothing ->
-      -- Error léxico: devolver un Left con el mensaje
       Left $ "Error lexico en la posicion " ++ show pos ++ ": secuencia no reconocida '" ++ lex ++ "'"
 
 -- ============================================
--- Constructor de lexer
+-- Pre-scan de comentarios: versión ligera
 -- ============================================
+-- Estrategia:
+--  - Partimos la entrada en segmentos: [noComentario, comentario, noComentario, ...]
+--  - Los segmentos de comentario (#...hasta \n) se IGNORAN (o podrías convertirlos a Token).
+--  - Los segmentos noComentario se envían a runMDD + classifyAndFilter.
+--  - Mantenemos la posición acumulada correcta.
 
--- | Construye un lexer a partir de un MDD y función de clasificación
--- CAMBIO: Devuelve una función que produce un Either String [Token]
 buildLexer :: MDD -> (String -> Maybe TokenKind) -> (String -> Either String [Token])
-buildLexer mdd mu = lexer mdd mu
+buildLexer mdd mu = lexWithCommentPrescan
+  where
+    lexWithCommentPrescan :: String -> Either String [Token]
+    lexWithCommentPrescan = go 0
+      where
+        go :: Int -> String -> Either String [Token]
+        go _   [] = Right []
+        go pos ('#':xs) =
+          -- Consumir hasta \n (sin consumir el '\n'), ignorándolo
+          let (commentBody, rest) = span (/= '\n') xs
+              consumed = 1 + length commentBody  -- '#'+cuerpo
+              pos' = pos + consumed
+          in go pos' rest  -- ignoramos comentario
+        go pos s =
+          -- Consumir hasta el próximo '#' o fin: tramo "normal"
+          let (chunk, rest) = break (== '#') s
+              pos' = pos + length chunk
+              raw  = runMDD mdd chunk
+          in case classifyAndFilter raw mu pos of
+               Left e     -> Left e
+               Right toks -> (toks ++) <$> go pos' rest
