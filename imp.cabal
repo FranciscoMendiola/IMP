@@ -14,6 +14,7 @@ library
       Com.Syrion.Models.Regex.ExprReg
       Com.Syrion.Models.Lexer.Token
       Com.Syrion.Models.Lexer.Lexer
+      Com.Syrion.Models.Lenguajes.ImpSpec
       Com.Syrion.Utils.Util
   build-depends:
       base       >=4.16 && <5
