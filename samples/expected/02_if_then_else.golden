@@ -1,0 +1,12 @@
+Token {tokenKind = KIf, lexeme = "if", position = 0}
+Token {tokenKind = Id, lexeme = "x", position = 3}
+Token {tokenKind = Leq, lexeme = "<=", position = 5}
+Token {tokenKind = IntLit, lexeme = "10", position = 8}
+Token {tokenKind = KThen, lexeme = "then", position = 11}
+Token {tokenKind = Id, lexeme = "y", position = 18}
+Token {tokenKind = Assign, lexeme = ":=", position = 20}
+Token {tokenKind = IntLit, lexeme = "100", position = 23}
+Token {tokenKind = KElse, lexeme = "else", position = 27}
+Token {tokenKind = Id, lexeme = "y", position = 34}
+Token {tokenKind = Assign, lexeme = ":=", position = 36}
+Token {tokenKind = IntLit, lexeme = "200", position = 39}

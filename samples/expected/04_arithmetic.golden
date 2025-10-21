@@ -1,0 +1,9 @@
+Token {tokenKind = Id, lexeme = "resultado", position = 0}
+Token {tokenKind = Assign, lexeme = ":=", position = 10}
+Token {tokenKind = Id, lexeme = "a", position = 13}
+Token {tokenKind = Plus, lexeme = "+", position = 15}
+Token {tokenKind = Id, lexeme = "b", position = 17}
+Token {tokenKind = Times, lexeme = "*", position = 19}
+Token {tokenKind = Id, lexeme = "c", position = 21}
+Token {tokenKind = Minus, lexeme = "-", position = 23}
+Token {tokenKind = Id, lexeme = "d", position = 25}

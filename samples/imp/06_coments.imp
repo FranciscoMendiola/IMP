@@ -1,0 +1,4 @@
+# Este es un comentario al inicio
+x := 5  # comentario al final de linea
+# Otro comentario
+y := x + 10  # suma con comentario
