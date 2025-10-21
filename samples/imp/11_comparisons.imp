@@ -1,0 +1,7 @@
+if a = b then
+  skip
+else
+  if x <= y then
+    z := 1
+  else
+    z := 0

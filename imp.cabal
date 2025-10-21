@@ -14,6 +14,8 @@ library
       Com.Syrion.Models.Regex.ExprReg
       Com.Syrion.Models.Lexer.Token
       Com.Syrion.Models.Lexer.Lexer
+      Com.Syrion.Models.Lenguajes.ImpSpec
+      Com.Syrion.Models.Lenguajes.ImpFast
       Com.Syrion.Utils.Util
   build-depends:
       base       >=4.16 && <5
@@ -21,20 +23,50 @@ library
     , text
   default-language: Haskell2010
 
+-- Ejecutable principal (demo)
 executable imp
   hs-source-dirs: app
   main-is: Main.hs
   build-depends:
       base
     , text
+    , containers
     , imp
   default-language: Haskell2010
 
-test-suite imp-test
-  type: exitcode-stdio-1.0
+-- (Opcional) Ejecutable auxiliar de pruebas
+executable test-imp
   hs-source-dirs: test
-  main-is: Spec.hs
+  main-is: TestImp.hs
   build-depends:
       base
+    , containers
+    , imp
+  default-language: Haskell2010
+
+-- Test suite con Hspec (mínimo)
+test-suite imp-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:
+      base
+    , imp
+    , hspec
+    , directory
+    , filepath
+    , text
+    , bytestring
+  default-language:    Haskell2010
+
+
+-- Ejecutable para generar golden
+executable make-golden
+  hs-source-dirs: app
+  main-is: MakeGolden.hs
+  build-depends:
+      base
+    , text
+    , containers
     , imp
   default-language: Haskell2010

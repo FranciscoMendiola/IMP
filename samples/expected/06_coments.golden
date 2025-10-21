@@ -1,0 +1,12 @@
+Token {tokenKind = Comment, lexeme = "# Este es un comentario al inicio", position = 0}
+Token {tokenKind = Id, lexeme = "x", position = 34}
+Token {tokenKind = Assign, lexeme = ":=", position = 36}
+Token {tokenKind = IntLit, lexeme = "5", position = 39}
+Token {tokenKind = Comment, lexeme = "# comentario al final de linea", position = 42}
+Token {tokenKind = Comment, lexeme = "# Otro comentario", position = 73}
+Token {tokenKind = Id, lexeme = "y", position = 91}
+Token {tokenKind = Assign, lexeme = ":=", position = 93}
+Token {tokenKind = Id, lexeme = "x", position = 96}
+Token {tokenKind = Plus, lexeme = "+", position = 98}
+Token {tokenKind = IntLit, lexeme = "10", position = 100}
+Token {tokenKind = Comment, lexeme = "# suma con comentario", position = 104}
