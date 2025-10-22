@@ -1,156 +1,131 @@
 -- app/Main.hs
 module Main where
 
-import System.IO (hSetEncoding, stdout, utf8)
-import qualified Data.Map.Strict as Map
+import Com.Syrion.Models.Automata.AFD (afnToAfd, prettyAFD)
+import Com.Syrion.Models.Automata.AFDMin (afdToAfdMin, finalesM, prettyAFDmin)
+import Com.Syrion.Models.Automata.AFN (afnEpToAFN, prettyAFN)
+import Com.Syrion.Models.Automata.AFNEp (exprRegToAFNEp, prettyAFNEp)
+import Com.Syrion.Models.Automata.MDD (MDD, afdMinToMDD, runMDD)
 
--- ===== Parte 1: Pipeline clásico (demo ER simple) =====
-import Com.Syrion.Models.Regex.ExprReg
-  ( ExprReg(..), term, ($$) )  
-
-import Com.Syrion.Models.Automata.AFNEp
-  ( exprRegToAFNEp, prettyAFNEp )
-import Com.Syrion.Models.Automata.AFN
-  ( afnEpToAFN, prettyAFN )
-import Com.Syrion.Models.Automata.AFD
-  ( afnToAfd, prettyAFD )
-import Com.Syrion.Models.Automata.AFDMin
-  ( afdToAfdMin, prettyAFDmin, finalesM )
-
-import Com.Syrion.Models.Automata.MDD
-  ( MDD, afdMinToMDD, runMDD )
-
-import Com.Syrion.Models.Lexer.Token  (TokenKind(..))
-
-import Com.Syrion.Models.Lenguajes.ImpFast (scanIMP, renderTokens)
+import Com.Syrion.Models.Lenguajes.ImpFast (scanIMP)
 import Com.Syrion.Models.Lenguajes.ImpSpec (impMu)
+import Com.Syrion.Models.Lexer.Token (TokenKind (..))
+import Com.Syrion.Models.Regex.ExprReg (ExprReg (..), term, ($$))
+import Data.List (unwords)
+import qualified Data.Map.Strict as Map
+import System.Environment (getArgs)
+import System.Exit (die)
+import System.IO (hSetEncoding, stdout, utf8)
 
-imprimirPar :: (Maybe TokenKind, String) -> IO ()
-imprimirPar (Just tok, lx) = putStrLn $ "    " ++ rellenarDerecha 12 (show tok) ++ " => " ++ show lx
-imprimirPar (Nothing , lx) = putStrLn $ "    ERROR        => " ++ show lx
+-- ---------------------------------------------------------------------
+-- Uso
+-- ---------------------------------------------------------------------
+usage :: String
+usage =
+  "Uso:\n"
+    <> "  imp [-p | --process] [-f | --file archivo.imp] [programa IMP]\n"
+    <> " Banderas:\n"
+    <> "  -p/--process (opcional) debe ir antes si se usa -f.\n"
+    <> "  -f/--file (opcional) debe ir inmediatamente después de -p/--process si se usa.\n"
+    <> "  Si no hay -f, el resto se toma como programa en terminal.\n"
 
-rellenarDerecha :: Int -> String -> String
-rellenarDerecha n s = s ++ replicate (max 0 (n - length s)) ' '
+-- -------------------------------------------------------------------------------
+-- parseP: detecta la bandera -p/--process y devuelve (estadoBandera, restoArgs)
+-- -------------------------------------------------------------------------------
+parseP :: [String] -> (Bool, [String])
+parseP ("-p" : xs) = (True, xs)
+parseP ("--process" : xs) = (True, xs)
+parseP ("-P" : xs) = (True, xs) -- opcional
+parseP xs = (False, xs)
 
+-- ---------------------------------------------------------------------
+-- parseF: detecta -f/--file en y devuelve (rutaArchivo, restoArgs)
+-- ---------------------------------------------------------------------
+parseF :: [String] -> (Maybe FilePath, [String])
+parseF ("-f" : p : xs) = (Just p, xs)
+parseF ("--file" : p : xs) = (Just p, xs)
+parseF xs = (Nothing, xs)
+
+-- ---------------------------------------------------------------------
+-- Construye una ER que es la concatenación de todos los caracteres
+-- del programa dado (pipeline "del programa").
+-- ---------------------------------------------------------------------
+erFromString :: String -> ExprReg
+erFromString "" = Epsilon
+erFromString (c : cs) = foldl ($$) (term c) (map term cs)
+
+-- ---------------------------------------------------------------------
+-- Main
+-- ---------------------------------------------------------------------
 main :: IO ()
 main = do
-  -- UTF-8 para Windows
   hSetEncoding stdout utf8
+  args0 <- getArgs
 
-  putStrLn "=========================================="
-  putStrLn "  ANALIZADOR LEXICO - PIPELINE COMPLETO"
-  putStrLn "  ER -> AFNeps -> AFN -> AFD -> AFDmin -> MDD -> LEXER"
-  putStrLn "=========================================="
-  putStrLn ""
+  -- 1) -p (si está) debe ir primero
+  let (pflag, restP) = parseP args0
 
-  -- ============================================
-  -- PARTE 1: Pipeline completo con ER simple (ab)
-  -- ============================================
-  putStrLn "============================================"
-  putStrLn "PARTE 1: Pipeline completo con ER simple"
-  putStrLn "============================================"
-  putStrLn ""
+  -- 2) -f (si está) debe ir inmediatamente después de -p
+  let (mfile, restF) = parseF restP
 
-  putStrLn "--- ER: a concatenado con b (ab) ---"
-  let er :: ExprReg
-      er = (term 'a') $$ (term 'b')
-  putStrLn $ "Expresion Regular: " ++ show er
-  putStrLn ""
+  -- 3) Programa: archivo o terminal
+  prog <- case mfile of
+    Just path -> readFile path
+    Nothing ->
+      let s = unwords restF
+       in if null s then die usage else pure s
 
-  -- Paso 1: ER -> AFN-ε (Thompson)
+  -- 4) Imprimir pipeline completo (opcional)
+  if pflag then demoPipeline prog else pure ()
+
+  -- 5) Lexer IMP: imprime cada token con `show`
+  putStrLn "=============================================================" 
+  putStrLn "Result Lexer - IMP: Tokens"
+  putStrLn "============================================================="
+  case scanIMP prog of
+    Left err -> putStrLn ("LEX ERROR: " ++ err)
+    Right toks -> mapM_ (putStrLn . show) toks
+
+-- ---------------------------------------------------------------------
+-- Pipeline del programa:
+--   ER(prog) -> AFNε -> AFN -> AFD -> AFDmin -> MDD
+--   (MDD se smoke-testea con el MISMO programa)
+-- ---------------------------------------------------------------------
+demoPipeline :: String -> IO ()
+demoPipeline prog = do
+  putStrLn "== PIPELINE (del programa): ER(prog) -> AFNε -> AFN -> AFD -> AFDmin -> MDD =="
+
+  -- ER del programa
+  let er = erFromString prog
+
+  -- Paso 1: ER -> AFN-ε
   let nfae = exprRegToAFNEp er
-  putStrLn "== Paso 1: AFN-eps (Thompson) =="
+  putStrLn "== AFNε =="
   putStrLn (prettyAFNEp nfae)
 
-  -- Paso 2: AFN-ε -> AFN (sin ε)
+  -- Paso 2: AFN-ε -> AFN
   let nfa = afnEpToAFN nfae
-  putStrLn "== Paso 2: AFN (sin transiciones epsilon) =="
+  putStrLn "== AFN =="
   putStrLn (prettyAFN nfa)
 
-  -- Paso 3: AFN -> AFD (determinista)
+  -- Paso 3: AFN -> AFD
   let afd = afnToAfd nfa
-  putStrLn "== Paso 3: AFD (determinista) =="
+  putStrLn "== AFD =="
   putStrLn (prettyAFD afd)
 
-  -- Paso 4: AFD -> AFDmin (mínimo)
-  let afdMin = afdToAfdMin afd
-  putStrLn "== Paso 4: AFDmin (minimizado) =="
-  putStrLn (prettyAFDmin afdMin)
+  -- Paso 4: AFD -> AFDmin
+  let am = afdToAfdMin afd
+  putStrLn "== AFDmin =="
+  putStrLn (prettyAFDmin am)
 
   -- Paso 5: AFDmin -> MDD
-  let mu = Map.fromList [ (q, Id) | q <- finalesM afdMin ]
+  let mu = Map.fromList [(q, Id) | q <- finalesM am]
   let mdd :: MDD
-      mdd = afdMinToMDD afdMin mu
-  putStrLn "== Paso 5: MDD (Maquina Discriminadora Determinista) =="
-  putStrLn "MDD construido exitosamente"
-  putStrLn ""
+      mdd = afdMinToMDD am mu
+  putStrLn "== MDD =="
+  putStrLn "(MDD construido a partir del programa.)"
 
-  -- Paso 6: MDD -> LEXER (aplicando funcion mu) con el MISMO estilo (sin tablas)
-  putStrLn "== Paso 6: LEXER (MDD + funcion mu) =="
-  putStrLn "Tokenizando cadenas de prueba:"
-  putStrLn ""
-
-  -- Usamos runMDD + impMu, y mostramos pares (Maybe TokenKind, String) con imprimirPar
-
-  -- Prueba 1: "a" (incompleto)
-  putStrLn "  Entrada: \"a\""
-  let pares1 = runMDD mdd "a"
-  let clasificados1 = map (\(_, lx) -> (impMu lx, lx)) pares1
-  putStrLn "  Tokens:"
-  mapM_ imprimirPar clasificados1
-  putStrLn "  Resultado: No acepta (necesita 'ab' completo)"
-  putStrLn ""
-
-  -- Prueba 2: "b" (no empieza bien)
-  putStrLn "  Entrada: \"b\""
-  let pares2 = runMDD mdd "b"
-  let clasificados2 = map (\(_, lx) -> (impMu lx, lx)) pares2
-  putStrLn "  Tokens:"
-  mapM_ imprimirPar clasificados2
-  putStrLn "  Resultado: Error lexico (no acepta 'b' solo)"
-  putStrLn ""
-
-  -- Prueba 3: "ab" (correcto)
-  putStrLn "  Entrada: \"ab\""
-  let pares3 = runMDD mdd "ab"
-  let clasificados3 = map (\(_, lx) -> (impMu lx, lx)) pares3
-  putStrLn "  Tokens:"
-  mapM_ imprimirPar clasificados3
-  putStrLn "  Resultado: ACEPTA - 'ab' es reconocido como Id"
-  putStrLn ""
-
-  -- Prueba 4: "abb" (maximal munch)
-  putStrLn "  Entrada: \"abb\""
-  let pares4 = runMDD mdd "abb"
-  let clasificados4 = map (\(_, lx) -> (impMu lx, lx)) pares4
-  putStrLn "  Tokens:"
-  mapM_ imprimirPar clasificados4
-  putStrLn "  Resultado: Maximal munch - reconoce 'ab', sobra 'b' (error)"
-  putStrLn ""
-
-  -- Prueba 5: "abc"
-  putStrLn "  Entrada: \"abc\""
-  let pares5 = runMDD mdd "abc"
-  let clasificados5 = map (\(_, lx) -> (impMu lx, lx)) pares5
-  putStrLn "  Tokens:"
-  mapM_ imprimirPar clasificados5
-  putStrLn "  Resultado: Maximal munch - reconoce 'ab', sobra 'c' (error)"
-  putStrLn ""
-
-  -- ============================================
-  -- PARTE 2: Lexer IMP (rápido) + Tabla bonita
-  -- ============================================
-  putStrLn "============================================"
-  putStrLn "PARTE 2: LEXER PARA IMP"
-  putStrLn "============================================"
-  putStrLn ""
-
-  let progIMP = "if x <= 10 then skip else x := x + 1"
-
-  putStrLn "Programa (IMP):"
-  putStrLn progIMP
-  putStrLn ""
-  putStrLn "Tokens (IMP):"
-  case scanIMP progIMP of
-    Left err    -> putStrLn ("LEX ERROR: " ++ err)
-    Right toks  -> renderTokens toks
+  -- Ejecuta MDD sobre el mismo programa
+  let clas xs = map (\(_, lx) -> (impMu lx, lx)) (runMDD mdd xs)
+  putStrLn "== MDD · Clasificación (impMu) =="
+  mapM_ print (clas prog)
