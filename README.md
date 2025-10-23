@@ -88,11 +88,11 @@ cabal build
 
 Se puede ejecutar el lexer mediante linea de comandos
 ```bash
-cabal run imp -- "while x <= 10 do x := x + 1;"
+cabal run imp -- -p "while x <= 10 do x := x + 1;"
 ```
 También se puede ejecutar con un archivo .imp como argumento con la bandera -f
 ```bash
-cabal run imp -- -p -f program.imp
+cabal run imp -- -f program.imp
 ```
 **Nota:** la bandera ''-p'' muestra el proceso completo de transformaciones en terminal
 
