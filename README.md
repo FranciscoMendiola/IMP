@@ -8,7 +8,7 @@ Este proyecto implementa, paso a paso, la construcción de autómatas a partir d
 1. **Expresiones Regulares** (`ExprReg`).
 2. **Autómatas Finitos No Deterministas con transiciones ε (AFN-ε)**.
 3. **Conversión de AFN-ε a AFN** (eliminación de ε).
-4. **Conversión de AFN a AFD** (determinización).
+4. **Conversión de AFN a AFD** (conversión a determinista).
 5. **Minimización del AFD**.
 6. Integración con un **Lexer**.
 
@@ -18,36 +18,46 @@ Este proyecto implementa, paso a paso, la construcción de autómatas a partir d
 
 ```bash
 IMP
-.
 ├── app
-│   ├── Main.hs              # demo
-│   └── MakeGolden.hs        # ejecutable para generar .golden (ImpFast)
+│   ├── Main.hs
+│   └── MakeGolden.hs
 ├── imp.cabal
+├── program.imp
 ├── README.md
-├── specs
-│   └── IMP.md               # especificación conceptual de pruebas/lexer
-├── src
-│   └── Com
-│       └── Syrion
-│           ├── Models
-│           │   ├── Automata
-│           │   │   ├── AFD.hs
-│           │   │   ├── AFDMin.hs
-│           │   │   ├── AFNEp.hs
-│           │   │   ├── AFN.hs
-│           │   │   └── MDD.hs
-│           │   ├── Lexer
-│           │   │   ├── Lexer.hs
-│           │   │   └── Token.hs
-│           │   └── Regex
-│           │       └── ExprReg.hs
-│           └── Utils
-│               └── Util.hs
 ├── samples
-│   ├── imp/                 # entradas .imp
-│   └── expected/            # salidas esperadas .golden
+│   ├── expected
+│   │   ├── 01_simple.golden
+│   │   ├── ...
+│   └── imp
+│       ├── 01_simple.imp
+│       ├── ...
+├── scripts
+│   └── create_golden.sh
+├── specs
+│   └── IMP.md
+├── src
+│   └── Com
+│       └── Syrion
+│           ├── Models
+│           │   ├── Automata
+│           │   │   ├── AFD.hs
+│           │   │   ├── AFDMin.hs
+│           │   │   ├── AFNEp.hs
+│           │   │   ├── AFN.hs
+│           │   │   └── MDD.hs
+│           │   ├── Lenguajes
+│           │   │   ├── ImpFast.hs
+│           │   │   └── ImpSpec.hs
+│           │   ├── Lexer
+│           │   │   ├── Lexer.hs
+│           │   │   └── Token.hs
+│           │   └── Regex
+│           │       └── ExprReg.hs
+│           └── Utils
+│               └── Util.hs
 └── test
-    └── Spec.hs              # golden tests (Hspec)
+    └── Spec.hs
+
 ```
 
 ---
@@ -67,12 +77,24 @@ curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
 
 ---
 
-## 🖥️ Ejecución
+## 🖥️ Compilación
 ```bash
 cabal update
 cabal build
-cabal run
 ```
+---
+
+## 🖥️ Ejecución
+
+Se puede ejecutar el lexer mediante linea de comandos
+```bash
+cabal run imp -- "while x <= 10 do x := x + 1;"
+```
+También se puede ejecutar con un archivo .imp como argumento con la bandera -f
+```bash
+cabal run imp -- -p -f program.imp
+```
+**Nota:** la bandera ''-p'' muestra el proceso completo de transformaciones en terminal
 
 ---
 

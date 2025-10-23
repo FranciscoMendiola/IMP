@@ -2,7 +2,6 @@
 module Com.Syrion.Models.Automata.MDD
   ( MDD(..)
   , afdMinToMDD      -- AFDmin -> MDD
-  , afdToMDD         -- AFD    -> MDD (sin minimizar)
   , runMDD           -- ejecución completa (si la quieres)
   , longestPrefixMDD 
   , prettyMDD
@@ -38,23 +37,6 @@ afdMinToMDD afdmin mu =
       fs    = finalesM afdmin
       delta = Map.fromList [ ((p,a), q) | (p,a,q) <- transicionesM afdmin ]
   in MDD qs sig delta q0 fs mu
-
-afdToMDD :: AFD -> Map Int TokenKind -> MDD
-afdToMDD afd mu =
-  let statesD  = estadosD afd
-      sigma    = alfabetoD afd
-      transD   = transicionesD afd
-      startD   = inicialD afd
-      finalsD' = finalesD afd
-      numerados = zip [0..] statesD
-      encontrarId s = case [ i | (i,s') <- numerados, s' == s ] of
-                   (i:_) -> i
-                   _     -> error "afdToMDD: estado determinista no encontrado"
-      qs     = map fst numerados
-      q0     = encontrarId startD
-      fs     = map encontrarId finalsD'
-      deltaM = Map.fromList [ ((encontrarId p, a), encontrarId q) | (p,a,q) <- transD ]
-  in MDD qs sigma deltaM q0 fs mu
 
 -- =======================
 -- Runner (completo)

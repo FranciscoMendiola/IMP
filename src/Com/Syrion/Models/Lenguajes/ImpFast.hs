@@ -14,12 +14,12 @@ import Com.Syrion.Models.Automata.AFNEp (exprRegToAFNEp)
 import Com.Syrion.Models.Automata.AFN   (afnEpToAFN)
 import Com.Syrion.Models.Automata.AFD   (AFD(..), afnToAfd)
 
-import Com.Syrion.Models.Automata.MDD
-  ( MDD(..), afdToMDD, longestPrefixMDD )
 
 import Com.Syrion.Models.Lexer.Token   (TokenKind(..))
 import Com.Syrion.Models.Lexer.Lexer   (Token(..))
 import Com.Syrion.Models.Lenguajes.ImpSpec (impMu)
+import Com.Syrion.Models.Automata.MDD
+import Com.Syrion.Models.Automata.AFDMin
 
 -- ===== Helpers de prefijo máximo (manuales) =====
 
@@ -65,12 +65,13 @@ construirMDD er =
   let afnep = exprRegToAFNEp er
       afn   = afnEpToAFN afnep
       afd   = afnToAfd afn
+      afdMin = afdToAfdMin afd
       mu    = Map.fromList
                [ (i, Id)
                | (i, qD) <- zip [0..] (estadosD afd)
                , qD `elem` finalesD afd
                ]
-  in afdToMDD afd mu
+  in afdMinToMDD afdMin mu
 
 mddWS   :: MDD;   mddWS   = construirMDD espaciosER
 mddOPS1 :: MDD;   mddOPS1 = construirMDD ops1ER
