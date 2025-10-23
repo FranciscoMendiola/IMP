@@ -1,0 +1,8 @@
+if x <= 10 then
+  if y <= 5 then
+    z := 1
+  else
+    z := 2
+else
+  while x <= 20 do
+    x := x + 1

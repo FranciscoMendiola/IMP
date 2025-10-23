@@ -1,0 +1,12 @@
+# aqui hay un comentario lo deberia ignorar
+suma := a + b;
+resta := a - b;
+mult := a * b;
+
+
+igual := a = b;
+menor := a <= b;
+
+
+conj := true and false;
+neg := not true

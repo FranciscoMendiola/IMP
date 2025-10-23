@@ -1,0 +1,10 @@
+Token {tokenKind = KWhile, lexeme = "while", position = 0}
+Token {tokenKind = Id, lexeme = "x", position = 6}
+Token {tokenKind = Leq, lexeme = "<=", position = 8}
+Token {tokenKind = IntLit, lexeme = "100", position = 11}
+Token {tokenKind = KDo, lexeme = "do", position = 15}
+Token {tokenKind = Id, lexeme = "x", position = 20}
+Token {tokenKind = Assign, lexeme = ":=", position = 22}
+Token {tokenKind = Id, lexeme = "x", position = 25}
+Token {tokenKind = Plus, lexeme = "+", position = 27}
+Token {tokenKind = IntLit, lexeme = "1", position = 29}

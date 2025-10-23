@@ -1,0 +1,17 @@
+Token {tokenKind = Id, lexeme = "x", position = 0}
+Token {tokenKind = Assign, lexeme = ":=", position = 1}
+Token {tokenKind = IntLit, lexeme = "1", position = 3}
+Token {tokenKind = Semi, lexeme = ";", position = 4}
+Token {tokenKind = Id, lexeme = "y", position = 5}
+Token {tokenKind = Assign, lexeme = ":=", position = 6}
+Token {tokenKind = IntLit, lexeme = "2", position = 8}
+Token {tokenKind = Semi, lexeme = ";", position = 9}
+Token {tokenKind = Id, lexeme = "z", position = 10}
+Token {tokenKind = Assign, lexeme = ":=", position = 11}
+Token {tokenKind = IntLit, lexeme = "3", position = 13}
+Token {tokenKind = Id, lexeme = "a", position = 15}
+Token {tokenKind = Assign, lexeme = ":=", position = 18}
+Token {tokenKind = IntLit, lexeme = "10", position = 22}
+Token {tokenKind = Id, lexeme = "b", position = 25}
+Token {tokenKind = Assign, lexeme = ":=", position = 27}
+Token {tokenKind = IntLit, lexeme = "20", position = 30}

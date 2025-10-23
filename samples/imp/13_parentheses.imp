@@ -1,0 +1,5 @@
+x := (a + b) * (c - d);
+if (x = 0) then
+  skip
+else
+  y := (x + 1) * 2

@@ -1,0 +1,4 @@
+if true and not false then
+  skip
+else
+  x := 0
